@@ -32,7 +32,7 @@ fn main() -> Result<()> {
         let (city, dist) = data.choose(&mut rng).expect("data is not empty");
         let temp = dist.sample(&mut rng);
         let temp = (temp * 10.0).round() / 10.0;
-        writeln!(buf, "{city};{temp}").context("writing data line")?;
+        writeln!(buf, "{city};{:.1}", temp).context("writing data line")?;
     }
 
     Ok(())
