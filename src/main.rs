@@ -63,7 +63,8 @@ impl FromStr for HackFloat {
 
 fn main() {
     // single_threaded();
-    single_threaded_hacked_floats();
+    //single_threaded_hacked_floats();
+    just_read_file();
 }
 
 fn single_threaded_hacked_floats() {
@@ -133,6 +134,13 @@ fn single_threaded() {
     let results: Vec<(String, Result)> =
         map.into_iter().sorted_by_key(|key| key.0.clone()).collect();
     println!("{:#?}", results);
+}
+
+fn just_read_file() {
+    if let Ok(lines) = read_lines("./measurements.txt") {
+        // Consumes the iterator, returns an (Optional) String
+        for line in lines.flatten() {}
+    }
 }
 
 // The output is wrapped in a Result to allow matching on errors.
