@@ -202,51 +202,44 @@ where
     let mut overflow_buffer = [0u8; 100];
     let mut use_overflow = false;
     let mut overflow_len = 0;
+    let mut overflow_count = 0;
     while let Ok(n) = file.read(&mut buffer[..]) {
+        // Possible State:
+        // 1) EOL is last Byte in buffer
+        //      -- No need to store overflow
+        //      -- Start next buffer as normal
+        // 2) EOL is first Byte in buffer
+        //      -- Doesn't happen on first iteration
+        //      -- Overflow buffer must have data
+        // 3) First and last bytes are normal
+        //      -- Except for first iteration, will have data in overflow buffer
+        //      -- Needs to store data into overflow buffer
         let mut line_start_ptr = 0;
-        for idx in line_start_ptr..n {
-            if buffer[idx] == EOL {
-                line_count += 1;
-                if use_overflow {
-                    if idx != 0 {
-                        let line = str::from_utf8(
-                            &[
-                                &overflow_buffer[..overflow_len],
-                                &buffer[line_start_ptr..idx - 1],
-                            ]
-                            .concat(),
-                        )
-                        .unwrap()
-                        .to_owned();
-                        use_overflow = false;
-                        let (city, temp) = line.split(";").next_tuple().unwrap();
-                        let city = String::from(city);
-                        let temp = temp.parse::<f64>();
-                        match temp {
-                            Ok(_) => {}
-                            Err(_) => {
-                                println!("error parsing value from line {}", line);
-                            }
-                        }
-                    } else {
-                        let line = str::from_utf8(&overflow_buffer[..overflow_len]).unwrap();
-                        let (city, temp) = line.split(";").next_tuple().unwrap();
-                        let city = String::from(city);
-                        let temp = temp.parse::<f64>();
-                    }
-                } else {
-                    let line = str::from_utf8(&buffer[line_start_ptr..idx - 1]).unwrap();
-                    let (city, temp) = line.split(";").next_tuple().unwrap();
-                    let city = String::from(city);
-                    let temp = temp.parse::<f64>();
-                }
-                line_start_ptr = idx + 1;
+        if use_overflow {
+            // Find first EOL and concat
+            let mut idx = 0;
+            while buffer[idx] != EOL {
+                idx += 1;
             }
+            let line = str::from_utf8(&[&overflow_buffer[..overflow_len], &buffer[..idx]].concat()).unwrap().to_owned();
+            let result = parse_line(&line);
+            line_count += 1;
+            line_start_ptr = idx + 1;
+            use_overflow = false;
+        }
+        for idx in line_start_ptr..n {
 
+            if buffer[idx] == EOL {
+                let line = str::from_utf8(&buffer[line_start_ptr..idx]).unwrap();
+                let result = parse_line(line);
+                line_start_ptr = idx + 1;
+                line_count += 1;
+            }
             if idx == n - 1 && buffer[idx] != EOL {
+                overflow_count += 1;
+                use_overflow = true;
                 overflow_len = n - line_start_ptr;
                 overflow_buffer[..overflow_len].copy_from_slice(&buffer[line_start_ptr..]);
-                use_overflow = true;
             }
         }
         if n == 0 {
@@ -254,6 +247,14 @@ where
         }
     }
     println!("Found lines {}", line_count);
+    println!("Used overflow buffer {} times.", overflow_count);
+}
+
+fn parse_line(line: &str) -> (String, f64) {
+    let (city, temp) = line.split(";").next_tuple().unwrap();
+    let city = String::from(city);
+    let temp: f64 = temp.parse::<f64>().unwrap();
+    return (city, temp);
 }
 
 // The output is wrapped in a Result to allow matching on errors.
