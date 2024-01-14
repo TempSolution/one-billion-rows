@@ -1,13 +1,14 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
+use std::io::prelude::*;
 use std::io::{self, BufRead};
 use std::path::Path;
 use std::str::FromStr;
 use std::string::ParseError;
 
-use ahash::HashMapExt;
 use itertools::Itertools;
+use rayon::prelude::*;
 
 #[derive(Debug)]
 struct Result {
@@ -64,7 +65,11 @@ impl FromStr for HackFloat {
 fn main() {
     // single_threaded();
     //single_threaded_hacked_floats();
-    just_read_file();
+    //just_read_file();
+
+    fast_read_lines("./measurements.txt");
+    //just_read_file_rayon();
+    //multi_process_rayon();
 }
 
 fn single_threaded_hacked_floats() {
@@ -136,10 +141,64 @@ fn single_threaded() {
     println!("{:#?}", results);
 }
 
+fn multi_process_rayon() {
+    if let Ok(lines) = read_lines("./measurements.txt") {
+        let results: HashMap<String, f64> = lines
+            .flatten()
+            .par_bridge()
+            .fold(
+                || HashMap::new(),
+                |mut m: HashMap<String, f64>, l: String| {
+                    let (city, temp) = l.split(";").next_tuple().unwrap();
+                    let temp = temp.parse::<f64>().unwrap();
+                    m.insert(city.to_string(), temp);
+                    return m;
+                },
+            )
+            .reduce(
+                || HashMap::new(),
+                |mut map1, map2| {
+                    for (k, v) in map2.iter() {
+                        if map1.contains_key(k) {
+                            let cur_val = map1[k];
+                            if cur_val > *v {
+                                map1.insert(k.clone(), *v);
+                            }
+                        }
+                    }
+                    return map1;
+                },
+            );
+        println!("{:#?}", results);
+    }
+}
+
+fn just_read_file_rayon() {
+    if let Ok(lines) = read_lines("./measurements.txt") {
+        // Consumes the iterator, returns an (Optional) String
+        lines.par_bridge().for_each(|_| ());
+    }
+}
+
 fn just_read_file() {
     if let Ok(lines) = read_lines("./measurements.txt") {
         // Consumes the iterator, returns an (Optional) String
         for line in lines.flatten() {}
+        ();
+    }
+}
+
+fn fast_read_lines<P>(filename: P)
+where
+    P: AsRef<Path>,
+{
+    const buffer_size_bytes: usize = 500_000_000;
+    let mut file = File::open(filename).unwrap();
+    let mut buffer = [0; buffer_size_bytes];
+    while let Ok(n) = file.read(&mut buffer[..]) {
+        if n == 0 {
+            break;
+        }
     }
 }
 
