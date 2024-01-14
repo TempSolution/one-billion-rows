@@ -221,8 +221,11 @@ where
             while buffer[idx] != EOL {
                 idx += 1;
             }
-            let line = str::from_utf8(&[&overflow_buffer[..overflow_len], &buffer[..idx]].concat()).unwrap().to_owned();
-            let result = parse_line(&line);
+            unsafe{
+
+                let line = str::from_utf8_unchecked(&[&overflow_buffer[..overflow_len], &buffer[..idx]].concat()).to_owned();
+                let result = parse_line(&line);
+            }
             line_count += 1;
             line_start_ptr = idx + 1;
             use_overflow = false;
@@ -230,8 +233,10 @@ where
         for idx in line_start_ptr..n {
 
             if buffer[idx] == EOL {
-                let line = str::from_utf8(&buffer[line_start_ptr..idx]).unwrap();
-                let result = parse_line(line);
+                unsafe {
+                    let line = str::from_utf8_unchecked(&buffer[line_start_ptr..idx]);
+                    let result = parse_line(line);
+                }
                 line_start_ptr = idx + 1;
                 line_count += 1;
             }
