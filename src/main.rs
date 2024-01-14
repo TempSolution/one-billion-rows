@@ -4,11 +4,14 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::{self, BufRead};
 use std::path::Path;
+use std::str;
 use std::str::FromStr;
 use std::string::ParseError;
 
 use itertools::Itertools;
 use rayon::prelude::*;
+
+const EOL: u8 = 0x0A;
 
 #[derive(Debug)]
 struct Result {
@@ -192,14 +195,65 @@ fn fast_read_lines<P>(filename: P)
 where
     P: AsRef<Path>,
 {
-    const buffer_size_bytes: usize = 500_000_000;
+    const buffer_size_bytes: usize = 2_000_000;
     let mut file = File::open(filename).unwrap();
     let mut buffer = [0; buffer_size_bytes];
+    let mut line_count: u64 = 0;
+    let mut overflow_buffer = [0u8; 100];
+    let mut use_overflow = false;
+    let mut overflow_len = 0;
     while let Ok(n) = file.read(&mut buffer[..]) {
+        let mut line_start_ptr = 0;
+        for idx in line_start_ptr..n {
+            if buffer[idx] == EOL {
+                line_count += 1;
+                if use_overflow {
+                    if idx != 0 {
+                        let line = str::from_utf8(
+                            &[
+                                &overflow_buffer[..overflow_len],
+                                &buffer[line_start_ptr..idx - 1],
+                            ]
+                            .concat(),
+                        )
+                        .unwrap()
+                        .to_owned();
+                        use_overflow = false;
+                        let (city, temp) = line.split(";").next_tuple().unwrap();
+                        let city = String::from(city);
+                        let temp = temp.parse::<f64>();
+                        match temp {
+                            Ok(_) => {}
+                            Err(_) => {
+                                println!("error parsing value from line {}", line);
+                            }
+                        }
+                    } else {
+                        let line = str::from_utf8(&overflow_buffer[..overflow_len]).unwrap();
+                        let (city, temp) = line.split(";").next_tuple().unwrap();
+                        let city = String::from(city);
+                        let temp = temp.parse::<f64>();
+                    }
+                } else {
+                    let line = str::from_utf8(&buffer[line_start_ptr..idx - 1]).unwrap();
+                    let (city, temp) = line.split(";").next_tuple().unwrap();
+                    let city = String::from(city);
+                    let temp = temp.parse::<f64>();
+                }
+                line_start_ptr = idx + 1;
+            }
+
+            if idx == n - 1 && buffer[idx] != EOL {
+                overflow_len = n - line_start_ptr;
+                overflow_buffer[..overflow_len].copy_from_slice(&buffer[line_start_ptr..]);
+                use_overflow = true;
+            }
+        }
         if n == 0 {
             break;
         }
     }
+    println!("Found lines {}", line_count);
 }
 
 // The output is wrapped in a Result to allow matching on errors.
